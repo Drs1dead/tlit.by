@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Снежный Кофе Тап 2026</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',sans-serif;}
+    body{background:#0a1628;color:white;overflow:hidden;height:100vh;}
+    video{position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:-1;opacity:0.7;}
+    .container{max-width:480px;margin:0 auto;padding:10px;height:100vh;display:flex;flex-direction:column;}
+    .header{background:rgba(0,0,0,0.6);padding:15px;border-radius:15px;margin-bottom:10px;text-align:center;}
+    h1{font-size:24px;}
+    .user{margin:8px 0;font-size:16px;color:#a8e6cf;}
+    .stats{font-size:20px;margin:10px 0;}
+    .tap-area{flex:1;display:flex;justify-content:center;align-items:center;position:relative;}
+    .coin{width:280px;height:280px;cursor:pointer;user-select:none;animation:float 6s infinite;}
+    @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-20px)}}
+    .click{pointer-events:none;position:absolute;color:#ffd700;font-weight:bold;font-size:42px;
+           animation:fly 1s forwards;text-shadow:2px 2px 8px #000;}
+    @keyframes fly{to{transform:translateY(-120px);opacity:0;}}
+    .energy-bar{background:#333;height:22px;border-radius:11px;overflow:hidden;margin:10px 0;}
+    .energy-fill{background:#ff9800;height:100%;transition:width 0.3s;} /* оранжевый для владельца */
+    .shop,.leaderboard{background:rgba(0,0,0,0.6);padding:20px;border-radius:15px;margin-top:10px;}
+    button{background:#c62828;color:white;border:none;padding:18px;margin:12px 0;
+           border-radius:12px;font-size:18px;width:100%;cursor:pointer;}
+    button:hover{background:#d32f2f;}
+    #btn200{background:#1b5e20 !important;}
+    #login-btn{background:#4285f4;padding:14px;font-size:18px;margin:20px auto;display:block;width:90%;}
+    .tab-btn{background:#333;padding:10px;margin:5px;border-radius:10px;}
+    .tab-btn.active{background:#d32f2f;}
+    .leaderboard ol{margin:15px 0;padding-left:25px;}
+    .leaderboard li{margin:8px 0;font-size:16px;}
+    .leaderboard .you{color:#ffeb3b;font-weight:bold;}
+    footer{position:fixed;bottom:5px;width:100%;text-align:center;font-size:12px;opacity:0.7;}
+  </style>
+</head>
+<body>
+
+<video autoplay loop muted playsinline>
+  <source src="https://assets.mixkit.co/videos/preview/mixkit-winter-landscape-with-pine-trees-and-snow-5118-large.mp4" type="video/mp4">
+</video>
+
+<div class="container">
+  <div class="header">
+    <h1>Снежный Кофе Тап 2026</h1>
+    <div id="user-info">Вход через Google</div>
+    <button id="login-btn">Войти через Google</button>
+
+    <div class="stats" id="game-ui" style="display:none;">
+      Снежные бонусы: <span id="points">0</span><br>
+      <div class="energy-bar"><div class="energy-fill" id="energy-fill"></div></div>
+      Энергия: <span id="energy">100</span>/<span id="max-energy">100</span>
+    </div>
+  </div>
+
+  <div class="tap-area" id="tap-area" style="display:none;">
+    <img src="https://i.ibb.co/5Y7g5nK/ded-moroz-coffee.png" class="coin" alt="Дед Мороз с кофе">
+  </div>
+
+  <div class="shop" id="shop" style="display:none;">
+    <h2>Магазин промокодов</h2>
+    <button id="btn100">100 бонусов → чай –30%</button>
+    <button id="btn200">200 бонусов → кофе БЕСПЛАТНО</button>
+  </div>
+
+  <div class="leaderboard" id="leaderboard" style="display:none;">
+    <h2>Лидерборд</h2>
+    <div style="text-align:center;margin-bottom:10px;">
+      <button class="tab-btn active" onclick="showTab('all')">За всё время</button>
+      <button class="tab-btn" onclick="showTab('week')">За неделю</button>
+    </div>
+    <div id="leaderboard-content">Загрузка...</div>
+  </div>
+</div>
+
+<footer>© 2026 КофеБанкТап • Владелец: denis.krivalts@gmail.com (∞ энергия)</footer>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDPx3nlFMIgD7HyqB9saAxapFhiH99Bh04",
+  authDomain: "tlit12.firebaseapp.com",
+  projectId: "tlit12",
+  storageBucket: "tlit12.firebasestorage.app",
+  messagingSenderId: "1001274757304",
+  appId: "1:1001274757304:web:78146e3aa6a8a00fd3e44d"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
+
+const OWNER_EMAIL = "denis.krivalts@gmail.com";
+const OWNER_MAX_ENERGY = 9999;
+const REGULAR_MAX_ENERGY = 100;
+
+const KEY = "SnowCoffee2026!";
+const encrypt = (t) => { let r=''; for(let i=0;i<t.length;i++) r+=String.fromCharCode(t.charCodeAt(i)^KEY.charCodeAt(i%KEY.length)); return btoa(r); };
+const decrypt = (e) => { try { const d=atob(e); let r=''; for(let i=0;i<d.length;i++) r+=String.fromCharCode(d.charCodeAt(i)^KEY.charCodeAt(i%KEY.length)); return r; } catch { return null; } };
+
+let user = null;
+let points = 0;
+let energy = 100;
+let maxEnergy = REGULAR_MAX_ENERGY;
+let isOwner = false;
+
+const showGame = () => {
+  document.getElementById('login-btn').style.display = 'none';
+  document.getElementById('game-ui').style.display = 'block';
+  document.getElementById('tap-area').style.display = 'flex';
+  document.getElementById('shop').style.display = 'block';
+  document.getElementById('leaderboard').style.display = 'block';
+  document.getElementById('max-energy').textContent = maxEnergy;
+  if (isOwner) document.querySelector('.energy-fill').style.background = '#ff9800';
+  loadLeaderboard('all');
+};
+
+document.getElementById('login-btn').onclick = () => {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  firebase.auth().signInWithPopup(provider);
+};
+
+firebase.auth().onAuthStateChanged(async (u) => {
+  if (!u) { user = null; return; }
+  user = u;
+  isOwner = (u.email === OWNER_EMAIL);
+  maxEnergy = isOwner ? OWNER_MAX_ENERGY : REGULAR_MAX_ENERGY;
+  energy = maxEnergy;
+
+  document.getElementById('user-info').innerHTML = `Привет, ${u.displayName.split(' ')[0]}${isOwner ? ' (ВЛАДЕЛЕЦ)' : ''}!`;
+  await loadUserData();
+  showGame();
+});
+
+const loadUserData = async () => {
+  const doc = await db.collection('users').doc(user.uid).get();
+  if (doc.exists) {
+    const dec = decrypt(doc.data().data);
+    if (dec) {
+      const d = JSON.parse(dec);
+      points = d.points || 0;
+      energy = isOwner ? maxEnergy : (d.energy || maxEnergy);
+    }
+  }
+  updateUI();
+};
+
+const saveUserData = async () => {
+  if (!user) return;
+  const data = { points, energy, name: user.displayName.split(' ')[0], updated: Date.now() };
+  const encrypted = encrypt(JSON.stringify(data));
+  await db.collection('users').doc(user.uid).set({
+    data: encrypted,
+    points,
+    name: data.name,
+    updated: data.updated,
+    isOwner: isOwner
+  });
+};
+
+const updateUI = () => {
+  document.getElementById('points').textContent = points.toLocaleString();
+  document.getElementById('energy').textContent = energy;
+  document.getElementById('energy-fill').style.width = (energy / maxEnergy * 100) + '%';
+};
+
+// Промокоды и тапалка — без изменений (коротко)
+const generateCode = (p) => p + '-2026-' + Math.random().toString(36).substr(2,6).toUpperCase();
+const used = new Set();
+
+document.getElementById('btn100').onclick = async () => { if(points>=100 && !used.has('TEA')){ points-=100; used.add('TEA'); await saveUserData(); updateUI(); loadLeaderboard(currentTab); alert(`Промокод: ${generateCode('TEA')}\nЧай –30%`); } else alert('Недостаточно или уже получал'); };
+document.getElementById('btn200').onclick = async () => { if(points>=200 && !used.has('FREE')){ points-=200; used.add('FREE'); await saveUserData(); updateUI(); loadLeaderboard(currentTab); alert(`Промокод: ${generateCode('FREE')}\nКофе БЕСПЛАТНО!`); } else alert('Недостаточно или уже получал'); };
+
+document.getElementById('tap-area').addEventListener('click', async (e) => {
+  if (energy <= 0 || !user) return;
+  points++; energy--;
+  updateUI(); await saveUserData(); loadLeaderboard(currentTab);
+  // анимация +1
+  const rect = e.currentTarget.getBoundingClientRect();
+  const el = document.createElement('div'); el.className='click'; el.textContent='+1';
+  el.style.left=(e.clientX-rect.left-30)+'px'; el.style.top=(e.clientY-rect.top-50)+'px';
+  e.currentTarget.appendChild(el); setTimeout(()=>el.remove(),1000);
+});
+
+setInterval(async () => {
+  if (energy < maxEnergy && user) { energy++; updateUI(); await saveUserData(); }
+}, isOwner ? 100 : 3500);   // владелец восстанавливает энергию мгновенно
+
+// Лидерборд (без изменений)
+let currentTab = 'all';
+async function loadLeaderboard(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelector(`.tab-btn[onclick="showTab('${tab}')"]`).classList.add('active');
+
+  let q = db.collection('users').orderBy('points','desc').limit(10);
+  if(tab==='week') q = db.collection('users').where('updated','>=',Date.now()-7*24*60*60*1000).orderBy('updated','desc').limit(10);
+
+  const snap = await q.get();
+  let html = '<ol>';
+  let pos = 1;
+  for(const doc of snap.docs){
+    const d = doc.data();
+    const name = d.name || 'Аноним';
+    const pts = d.points || 0;
+    const you = doc.id === user?.uid;
+    html += `<li ${you?'class="you"':''}>${pos++}. ${name} — ${pts.toLocaleString()} бонусов ${you?'(ТЫ)':''}</li>`;
+  }
+  html += '</ol>';
+  document.getElementById('leaderboard-content').innerHTML = html;
+}
+function showTab(t){loadLeaderboard(t);}
+</script>
+</body>
+</html>
